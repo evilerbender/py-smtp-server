@@ -1,0 +1,77 @@
+{
+  "rules": [
+    {
+      "name": "internal_emails",
+      "conditions": {
+        "from_domain": "company.com",
+        "to_domain": ["client1.com", "client2.com"]
+      },
+      "processors": ["smtpcom_prod"]
+    },
+    {
+      "name": "test_emails",
+      "conditions": {
+        "from_domain": "test.company.com"
+      },
+      "processors": ["smtpcom_dev", "s3_archive"]
+    },
+    {
+      "name": "urgent_emails",
+      "conditions": {
+        "subject_contains": ["URGENT", "CRITICAL", "EMERGENCY"]
+      },
+      "processors": ["smtpcom_priority", "s3_archive"]
+    },
+    {
+      "name": "marketing_emails",
+      "conditions": {
+        "header_exists": "X-Marketing-Campaign"
+      },
+      "processors": ["smtpcom_marketing"]
+    },
+    {
+      "name": "support_emails",
+      "conditions": {
+        "to_email": ["support@company.com", "help@company.com"]
+      },
+      "processors": ["smtpcom_support", "s3_archive"]
+    },
+    {
+      "name": "default_rule",
+      "conditions": {},
+      "processors": ["s3_archive"]
+    }
+  ],
+  "processors": {
+    "smtpcom_prod": {
+      "type": "smtpcom_api",
+      "api_key": "prod-api-key-here",
+      "channel": "production"
+    },
+    "smtpcom_dev": {
+      "type": "smtpcom_api", 
+      "api_key": "dev-api-key-here",
+      "channel": "development"
+    },
+    "smtpcom_priority": {
+      "type": "smtpcom_api",
+      "api_key": "priority-api-key-here", 
+      "channel": "priority"
+    },
+    "smtpcom_marketing": {
+      "type": "smtpcom_api",
+      "api_key": "marketing-api-key-here",
+      "channel": "marketing"
+    },
+    "smtpcom_support": {
+      "type": "smtpcom_api",
+      "api_key": "support-api-key-here",
+      "channel": "support"
+    },
+    "s3_archive": {
+      "type": "s3_storage",
+      "bucket_name": "email-archive-bucket",
+      "key_prefix": "archived-emails/"
+    }
+  }
+}

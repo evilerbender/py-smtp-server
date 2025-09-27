@@ -1,0 +1,26 @@
+[Unit]
+Description=Python SMTP SQS Worker
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=smtp
+Group=smtp
+WorkingDirectory=/opt/py-smtp-server
+EnvironmentFile=/opt/py-smtp-server/.env
+ExecStart=/opt/py-smtp-server/.venv/bin/uv run sqs_worker.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=py-smtp-worker
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

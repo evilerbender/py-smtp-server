@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Email Routing Rules Configuration",
+  "description": "Schema for rule-based email routing with AWS Parameter Store integration",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Configuration schema version",
+      "default": "1.0"
+    },
+    "default_processors": {
+      "type": "array",
+      "description": "Default processors when no rules match",
+      "items": {
+        "$ref": "#/definitions/processor_config"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "description": "Email routing rules evaluated in order",
+      "items": {
+        "$ref": "#/definitions/routing_rule"
+      }
+    }
+  },
+  "required": ["rules"],
+  "definitions": {
+    "routing_rule": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable rule name"
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Rule priority (lower = higher priority)",
+          "default": 100
+        },
+        "conditions": {
+          "$ref": "#/definitions/conditions"
+        },
+        "processors": {
+          "type": "array",
+          "description": "Processors to use when rule matches",
+          "items": {
+            "$ref": "#/definitions/processor_config"
+          }
+        },
+        "stop_processing": {
+          "type": "boolean",
+          "description": "Stop evaluating rules after this match",
+          "default": true
+        }
+      },
+      "required": ["name", "conditions", "processors"]
+    },
+    "conditions": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/definitions/string_matcher"
+        },
+        "to": {
+          "$ref": "#/definitions/string_matcher"
+        },
+        "subject": {
+          "$ref": "#/definitions/string_matcher"
+        },
+        "headers": {
+          "type": "object",
+          "description": "Match specific email headers",
+          "patternProperties": {
+            "^[a-zA-Z0-9-]+$": {
+              "$ref": "#/definitions/string_matcher"
+            }
+          }
+        },
+        "size": {
+          "$ref": "#/definitions/size_matcher"
+        },
+        "and": {
+          "type": "array",
+          "description": "All conditions must match",
+          "items": {
+            "$ref": "#/definitions/conditions"
+          }
+        },
+        "or": {
+          "type": "array",
+          "description": "Any condition must match",
+          "items": {
+            "$ref": "#/definitions/conditions"
+          }
+        },
+        "not": {
+          "$ref": "#/definitions/conditions",
+          "description": "Condition must not match"
+        }
+      }
+    },
+    "string_matcher": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Exact string match"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "equals": {
+              "type": "string",
+              "description": "Exact match"
+            },
+            "contains": {
+              "type": "string",
+              "description": "Contains substring"
+            },
+            "starts_with": {
+              "type": "string",
+              "description": "Starts with prefix"
+            },
+            "ends_with": {
+              "type": "string",
+              "description": "Ends with suffix"
+            },
+            "regex": {
+              "type": "string",
+              "description": "Regular expression match"
+            },
+            "in": {
+              "type": "array",
+              "description": "Value is in list",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "size_matcher": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "integer",
+          "description": "Minimum size in bytes"
+        },
+        "max": {
+          "type": "integer",
+          "description": "Maximum size in bytes"
+        }
+      },
+      "additionalProperties": false
+    },
+    "processor_config": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["file_storage", "s3_storage", "ses_forwarder", "smtpcom_api"],
+          "description": "Processor type"
+        },
+        "config": {
+          "type": "object",
+          "description": "Processor-specific configuration"
+        }
+      },
+      "required": ["type", "config"]
+    }
+  }
+}

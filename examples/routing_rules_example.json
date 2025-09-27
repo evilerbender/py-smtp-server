@@ -1,0 +1,123 @@
+{
+  "version": "1.0",
+  "default_processors": [
+    {
+      "type": "file_storage",
+      "config": {
+        "storage_dir": "/var/spool/mail/default"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "name": "High Priority Support Emails",
+      "priority": 10,
+      "conditions": {
+        "and": [
+          {
+            "to": {
+              "contains": "support@"
+            }
+          },
+          {
+            "subject": {
+              "regex": "\\[URGENT\\]|\\[HIGH\\]"
+            }
+          }
+        ]
+      },
+      "processors": [
+        {
+          "type": "smtpcom_api",
+          "config": {
+            "api_key": "urgent-delivery-key",
+            "sender": "alerts@company.com"
+          }
+        },
+        {
+          "type": "file_storage",
+          "config": {
+            "storage_dir": "/var/spool/mail/urgent"
+          }
+        }
+      ],
+      "stop_processing": true
+    },
+    {
+      "name": "Marketing Emails to S3",
+      "priority": 20,
+      "conditions": {
+        "or": [
+          {
+            "from": {
+              "ends_with": "@marketing.company.com"
+            }
+          },
+          {
+            "headers": {
+              "X-Campaign-Type": {
+                "in": ["newsletter", "promotion", "announcement"]
+              }
+            }
+          }
+        ]
+      },
+      "processors": [
+        {
+          "type": "s3_storage",
+          "config": {
+            "bucket": "marketing-emails",
+            "prefix": "campaigns/"
+          }
+        }
+      ],
+      "stop_processing": false
+    },
+    {
+      "name": "Large Attachments",
+      "priority": 30,
+      "conditions": {
+        "size": {
+          "min": 10485760
+        }
+      },
+      "processors": [
+        {
+          "type": "s3_storage",
+          "config": {
+            "bucket": "large-emails",
+            "prefix": "attachments/"
+          }
+        }
+      ],
+      "stop_processing": false
+    },
+    {
+      "name": "Internal Company Emails",
+      "priority": 40,
+      "conditions": {
+        "and": [
+          {
+            "from": {
+              "ends_with": "@company.com"
+            }
+          },
+          {
+            "to": {
+              "ends_with": "@company.com"
+            }
+          }
+        ]
+      },
+      "processors": [
+        {
+          "type": "file_storage",
+          "config": {
+            "storage_dir": "/var/spool/mail/internal"
+          }
+        }
+      ],
+      "stop_processing": true
+    }
+  ]
+}
