@@ -485,6 +485,9 @@ def create_worker_processors():
             elif processor_type == 'smtpcom_api':
                 from processors import SMTPComAPIProcessor
                 processors.append(SMTPComAPIProcessor(processor_config))
+            elif processor_type == 'redis_hybrid':
+                from processors import RedisHybridProcessor
+                processors.append(RedisHybridProcessor(processor_config))
             else:
                 logger.warning(f"Unknown processor type: {processor_type}")
         except Exception as e:

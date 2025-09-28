@@ -1,7 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Install SMTP server and SQS worker as systemd services
+# Install SMTP server and workers as systemd services
+# Supports both SQS (AWS) and Redis (non-AWS) architectures
 
 # Create user and group
 sudo useradd -r -s /bin/false smtp || true
@@ -27,21 +28,29 @@ sudo -u smtp uv sync
 # Install systemd services
 sudo cp py-smtp-server.service /etc/systemd/system/
 sudo cp py-smtp-worker.service /etc/systemd/system/
+sudo cp py-smtp-redis-worker.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable py-smtp-server
-sudo systemctl enable py-smtp-worker
 
 echo "Installation complete. Edit /opt/py-smtp-server/.env for configuration"
 echo ""
-echo "SMTP Server commands:"
-echo "  Start: sudo systemctl start py-smtp-server"
-echo "  Status: sudo systemctl status py-smtp-server"
-echo "  Logs: sudo journalctl -u py-smtp-server -f"
+echo "Choose your architecture:"
 echo ""
-echo "SQS Worker commands:"
-echo "  Start: sudo systemctl start py-smtp-worker"
-echo "  Status: sudo systemctl status py-smtp-worker"
-echo "  Logs: sudo journalctl -u py-smtp-worker -f"
-echo ""
-echo "Start both services:"
+echo "=== SQS Architecture (AWS) ==="
+echo "Enable SQS worker:"
+echo "  sudo systemctl enable py-smtp-worker"
 echo "  sudo systemctl start py-smtp-server py-smtp-worker"
+echo ""
+echo "Commands:"
+echo "  Status: sudo systemctl status py-smtp-server py-smtp-worker"
+echo "  Logs: sudo journalctl -u py-smtp-server -u py-smtp-worker -f"
+echo ""
+echo "=== Redis Architecture (Non-AWS) ==="
+echo "Install Redis first: sudo apt install redis-server"
+echo "Enable Redis worker:"
+echo "  sudo systemctl enable py-smtp-redis-worker"
+echo "  sudo systemctl start py-smtp-server py-smtp-redis-worker"
+echo ""
+echo "Commands:"
+echo "  Status: sudo systemctl status py-smtp-server py-smtp-redis-worker"
+echo "  Logs: sudo journalctl -u py-smtp-server -u py-smtp-redis-worker -f"

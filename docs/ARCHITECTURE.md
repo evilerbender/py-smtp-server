@@ -174,6 +174,70 @@ emails/YYYY/MM/DD/HH/from_domain/message_id.eml
 3. Worker polls SQS, retrieves full email from S3
 4. Process through final processors
 
+### 6. Redis+Stream Hybrid Processor (`processors/redis_hybrid.py`)
+
+**Purpose**: Store complete emails in Redis and queue lightweight metadata in Redis Streams
+
+**Architecture Benefits**:
+- Single backend system (no dependency on AWS services)
+- Lower latency than S3-based storage
+- Built-in TTL for automatic cleanup
+- Atomic operations and strong consistency
+- Better suited for on-premise or non-AWS deployments
+- Support for distributed processing with consumer groups
+
+**Redis Key Structure**:
+```
+email:message_id -> Hash with email data and metadata
+```
+
+**Redis Stream Message Format**:
+```json
+{
+  "id": "uuid",
+  "timestamp": "ISO8601",
+  "envelope": {"mail_from": "...", "rcpt_tos": ["..."]},
+  "headers": {"subject": "...", "from": "...", "to": "..."},
+  "metadata": {
+    "has_attachments": true,
+    "is_multipart": true,
+    "size_bytes": 2048576
+  },
+  "redis_reference": {
+    "key": "email:uuid",
+    "host": "redis-host",
+    "port": 6379,
+    "db": 0
+  }
+}
+```
+
+**Flow**:
+1. Store complete email as Redis hash with TTL
+2. Send lightweight metadata + Redis reference to Stream
+3. Worker reads from Stream using consumer groups
+4. Retrieve full email from Redis hash
+5. Process through final processors
+6. Acknowledge message in Stream
+
+### 7. Redis Worker (`redis_worker.py`)
+
+**Purpose**: Process queued emails from Redis Streams through final processors
+
+**Key Features**:
+- Redis Streams with consumer groups for reliable processing
+- Automatic message acknowledgment on success
+- Email reconstruction from Redis hash storage
+- Support for multiple workers with load balancing
+- Connection pooling and reconnection handling
+
+**Flow**:
+1. Read messages from Redis Stream (XREADGROUP)
+2. Parse message payload
+3. Retrieve complete email from Redis hash
+4. Process through configured processors
+5. Acknowledge message on success (XACK)
+
 **Base Interface** (`base.py`):
 ```python
 class EmailProcessor(ABC):
@@ -189,7 +253,8 @@ class EmailProcessor(ABC):
 - `SESForwarderProcessor`: Forward via AWS SES
 - `SMTPComAPIProcessor`: Send via SMTP.com API
 - `SQSQueueProcessor`: Queue to SQS for async processing
-- `SQSS3HybridProcessor`: Store in S3 + queue metadata in SQS (recommended)
+- `SQSS3HybridProcessor`: Store in S3 + queue metadata in SQS (recommended for AWS)
+- `RedisHybridProcessor`: Store in Redis + queue metadata in Redis Streams (recommended for non-AWS)
 
 ## Configuration System
 
@@ -203,6 +268,17 @@ class EmailProcessor(ABC):
 **SQS Integration**:
 - `SQS_QUEUE_URL`: SQS queue URL for email processing
 - `EMAIL_PROCESSORS`: JSON array of processor configurations
+
+**Redis Integration**:
+- `REDIS_STREAM_NAME`: Redis Stream name for email queue
+- `REDIS_HOST`: Redis server hostname (default: localhost)
+- `REDIS_PORT`: Redis server port (default: 6379)
+- `REDIS_DB`: Redis database number (default: 0)
+- `REDIS_PASSWORD`: Redis authentication password (optional)
+- `REDIS_USERNAME`: Redis authentication username (optional)
+- `REDIS_SSL`: Enable SSL/TLS connection (default: false)
+- `REDIS_CONSUMER_GROUP`: Consumer group name (default: workers)
+- `REDIS_CONSUMER_NAME`: Consumer name (auto-generated if not provided)
 
 ### Configuration Loading
 
@@ -219,6 +295,17 @@ EMAIL_PROCESSORS=[{
   "type": "sqs_queue",
   "config": {
     "queue_url": "https://sqs.us-east-1.amazonaws.com/123456789012/email-queue"
+  }
+}]
+
+# SMTP Server with Redis hybrid queuing
+EMAIL_PROCESSORS=[{
+  "type": "redis_hybrid",
+  "config": {
+    "redis_host": "localhost",
+    "redis_port": 6379,
+    "stream_name": "email_queue",
+    "email_ttl": 86400
   }
 }]
 

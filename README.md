@@ -30,11 +30,13 @@ A production-ready, standalone Python SMTP server using aiosmtpd with a decouple
 
 ## Key Features
 
-- **Decoupled Architecture**: SMTP reception separate from email processing via SQS
+- **Decoupled Architecture**: SMTP reception separate from email processing via queues
+- **Multiple Queue Backends**: SQS+S3 for AWS, Redis+Streams for on-premise/non-AWS
 - **Horizontal Scaling**: Multiple SMTP servers and workers with shared queue
 - **Modular Processors**: Pluggable email routing (S3, SES, SMTP.com, File Storage)
 - **Production Ready**: Systemd integration, logging, error handling, signal management
 - **AWS Native**: Designed for VPC deployment with SQS, S3, SES integration
+- **Redis Alternative**: Single backend system for simplified on-premise deployments
 - **High Availability**: Queue-based buffering handles traffic spikes and failures
 
 ## Quick Start
@@ -51,6 +53,28 @@ uv run python smtp_server.py
 # Run SQS worker (requires SQS_QUEUE_URL)
 export SQS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/email-queue
 uv run python sqs_worker.py
+```
+
+### Redis Alternative (Non-AWS)
+
+```bash
+# Install Redis
+sudo apt install redis-server
+
+# Install dependencies with Redis support
+uv sync
+uv add redis
+
+# Run SMTP server with Redis hybrid processor
+export email.processors.0.type=redis_hybrid
+export email.processors.0.redis_host=localhost
+export email.processors.0.stream_name=email_queue
+export email.processors.0.email_ttl=86400
+uv run python smtp_server.py
+
+# Run Redis worker
+export worker.redis.stream_name=email_queue
+uv run python redis_worker.py
 ```
 
 ### Production Deployment
@@ -76,21 +100,68 @@ SMTP_HOST=0.0.0.0
 SMTP_PORT=8025
 LOG_LEVEL=INFO
 
-# SQS Integration
-SQS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/email-queue
+# SQS Integration (for worker)
+worker.sqs.queue_url=https://sqs.us-east-1.amazonaws.com/123456789012/email-queue
 
-# Processor Configuration (JSON)
-EMAIL_PROCESSORS=[{"type": "sqs_s3_hybrid", "config": {"queue_url": "https://sqs.us-east-1.amazonaws.com/123456789012/email-queue", "s3_bucket": "my-email-storage-bucket"}}]
+# Processor Configuration (dot-notation)
+# SQS+S3 Hybrid (AWS)
+email.processors.0.type=sqs_s3_hybrid
+email.processors.0.queue_url=https://sqs.us-east-1.amazonaws.com/123456789012/email-queue
+email.processors.0.s3_bucket=my-email-storage-bucket
+
+# Redis Alternative (non-AWS)
+email.processors.0.type=redis_hybrid
+email.processors.0.redis_host=localhost
+email.processors.0.stream_name=email_queue
+email.processors.0.email_ttl=86400
+
+# Redis Worker Configuration
+worker.redis.stream_name=email_queue
+worker.redis.host=localhost
+worker.redis.port=6379
+worker.redis.db=0
+worker.redis.consumer_group=workers
+
+# Worker Processors (for final processing)
+worker.processors.0.type=file_storage
+worker.processors.0.storage_dir=/var/spool/mail/processed
 ```
 
 ## Available Processors
 
 - **SQSS3HybridProcessor**: Store emails in S3 + queue metadata in SQS (recommended for production)
+- **RedisHybridProcessor**: Store emails in Redis + queue metadata in Redis Streams (recommended for non-AWS)
 - **SQSQueueProcessor**: Queue emails to SQS for async processing
 - **FileStorageProcessor**: Save emails as files on disk
 - **S3StorageProcessor**: Store emails in AWS S3 buckets
 - **SESForwarderProcessor**: Forward emails via AWS SES
 - **SMTPComAPIProcessor**: Send emails via SMTP.com REST API with attachment support
+
+## Backend Comparison
+
+| Feature | SQS+S3 (AWS) | Redis Hybrid |
+|---------|--------------|--------------|
+| **Infrastructure** | AWS SQS + S3 | Single Redis instance |
+| **Setup Complexity** | AWS configuration | Simple installation |
+| **Latency** | Higher (network + S3) | Lower (in-memory) |
+| **Scalability** | Unlimited (AWS managed) | Redis cluster limits |
+| **Cost** | Pay per use | Self-hosted |
+| **Reliability** | AWS SLA guarantees | Redis persistence |
+| **TTL** | S3 lifecycle policies | Built-in expiration |
+| **Dependencies** | boto3, AWS credentials | redis-py |
+| **Best For** | AWS-native deployments | On-premise, non-AWS |
+
+### Choose SQS+S3 when:
+- Running on AWS infrastructure
+- Need unlimited scale
+- Want managed services
+- Require high availability guarantees
+
+### Choose Redis when:
+- On-premise or non-AWS deployments
+- Need lower latency
+- Want simple setup
+- Have cost constraints
 
 ## Documentation
 
@@ -130,25 +201,57 @@ QUIT
 # Check SQS queue for messages
 aws sqs get-queue-attributes --queue-url $SQS_QUEUE_URL --attribute-names ApproximateNumberOfMessages
 
+# Check Redis queue for messages (Redis alternative)
+redis-cli XLEN email_queue
+
+# Run all automated tests
+./run_tests.sh
+
+# Run selective tests (useful when some components are incomplete)
+./run_tests.sh redis           # Run only Redis tests
+./run_tests.sh local syntax    # Run local and syntax tests
+./run_tests.sh config          # Run only configuration tests
+
+# Available test groups: local, redis, syntax, config, all
+# - local: Multi-processor configuration and instantiation tests
+# - redis: Redis-specific functionality and integration tests  
+# - syntax: Python syntax validation and import checks
+# - config: Configuration loading and processor creation tests
+# - all: All test groups (default)
+
+# Test worker imports and functionality
+./test-workers.sh
+
+# Run automated Redis test
+./test-redis.sh
+
 # Monitor processing
 sudo journalctl -u py-smtp-worker -f
+# OR for Redis worker
+sudo journalctl -u py-smtp-redis-worker -f
 ```
 
 ## Monitoring
 
 ### Service Status
 ```bash
-# Check service status
+# Check service status (SQS version)
 sudo systemctl status py-smtp-server py-smtp-worker
+
+# Check service status (Redis version)
+sudo systemctl status py-smtp-server py-smtp-redis-worker
 
 # View logs
 sudo journalctl -u py-smtp-server -u py-smtp-worker -f
+# OR for Redis
+sudo journalctl -u py-smtp-server -u py-smtp-redis-worker -f
 ```
 
 ### Health Checks
 - **SMTP Server**: TCP connection test on port 8025
 - **SQS Worker**: Message processing rate and error logs
-- **Queue Health**: SQS queue depth and message age
+- **Redis Worker**: Stream processing rate and Redis connectivity
+- **Queue Health**: SQS queue depth / Redis stream length and message age
 
 ## Scaling
 

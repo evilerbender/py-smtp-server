@@ -87,6 +87,12 @@ worker.processors.0.channel=prod
 worker.processors.1.type=ses_forwarder
 worker.processors.1.region=us-east-1
 worker.processors.1.from_email=noreply@domain.com
+
+# Redis alternative to SQS+S3
+email.processors.0.type=redis_hybrid
+email.processors.0.redis_host=localhost
+email.processors.0.stream_name=email_queue
+email.processors.0.email_ttl=86400
 ```
 
 ## Processor Interface
@@ -412,6 +418,78 @@ emails/
 }
 ```
 
+### RedisHybridProcessor
+
+Stores complete emails in Redis and queues lightweight metadata in Redis Streams for processing by workers. Provides a single-backend alternative to SQS+S3 for non-AWS deployments.
+
+**Configuration**:
+```bash
+email.processors.0.type=redis_hybrid
+email.processors.0.redis_host=localhost
+email.processors.0.redis_port=6379
+email.processors.0.stream_name=email_queue
+email.processors.0.email_ttl=86400
+```
+
+**Parameters**:
+- `redis_host` (string, optional): Redis server hostname (default: localhost)
+- `redis_port` (int, optional): Redis server port (default: 6379)
+- `redis_db` (int, optional): Redis database number (default: 0)
+- `redis_password` (string, optional): Redis authentication password
+- `redis_username` (string, optional): Redis authentication username (Redis 6.0+)
+- `redis_ssl` (bool, optional): Enable SSL/TLS connection (default: false)
+- `stream_name` (string, optional): Redis Stream name for queue (default: email_queue)
+- `email_ttl` (int, optional): Email storage TTL in seconds (default: 86400, 0 for no expiration)
+- `key_prefix` (string, optional): Prefix for Redis keys (default: email:)
+
+**Behavior**:
+- Stores complete email as Redis hash with automatic TTL
+- Sends lightweight metadata + Redis reference to Stream
+- Uses Redis Streams for reliable queuing with consumer groups
+- Supports distributed processing with multiple workers
+- Lower latency than S3-based storage
+- Built-in expiration for automatic cleanup
+
+**Stream Message Format**:
+```json
+{
+  "id": "uuid",
+  "timestamp": "ISO8601",
+  "envelope": {"mail_from": "...", "rcpt_tos": ["..."]},
+  "headers": {"subject": "...", "from": "...", "to": "..."},
+  "metadata": {
+    "has_attachments": true,
+    "is_multipart": true,
+    "size_bytes": 2048576
+  },
+  "redis_reference": {
+    "key": "email:uuid",
+    "host": "redis-host",
+    "port": 6379,
+    "db": 0
+  }
+}
+```
+
+**Stream Fields**:
+- `message_id` (String): Unique message identifier
+- `payload` (String): JSON-encoded message data
+- `from_domain` (String): Extracted sender domain
+- `to_domain` (String): Extracted recipient domain
+- `has_attachments` (String): "true" if email has attachments
+- `size_bytes` (String): Email size in bytes
+
+**Example**:
+```python
+processor = RedisHybridProcessor({
+    'redis_host': 'redis.example.com',
+    'redis_port': 6379,
+    'redis_password': 'secret',
+    'stream_name': 'email_queue',
+    'email_ttl': 7200  # 2 hours
+})
+```
+
 ## Creating Custom Processors
 
 ### Implementation Steps
@@ -532,6 +610,17 @@ class WebhookProcessor(EmailProcessor):
 
 **SQS Integration**:
 - `SQS_QUEUE_URL`: SQS queue URL for worker
+
+**Redis Integration**:
+- `REDIS_STREAM_NAME`: Redis Stream name for worker
+- `REDIS_HOST`: Redis server hostname (default: localhost)
+- `REDIS_PORT`: Redis server port (default: 6379)
+- `REDIS_DB`: Redis database number (default: 0)
+- `REDIS_PASSWORD`: Redis authentication password (optional)
+- `REDIS_USERNAME`: Redis authentication username (optional)
+- `REDIS_SSL`: Enable SSL/TLS connection (default: false)
+- `REDIS_CONSUMER_GROUP`: Consumer group name (default: workers)
+- `REDIS_CONSUMER_NAME`: Consumer name (auto-generated if not provided)
 
 ### Processor Configuration Format
 

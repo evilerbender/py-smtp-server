@@ -89,6 +89,9 @@ def create_processors():
             elif proc_type == 'sqs_s3_hybrid':
                 from processors import SQSS3HybridProcessor
                 processors.append(SQSS3HybridProcessor(proc_settings))
+            elif proc_type == 'redis_hybrid':
+                from processors import RedisHybridProcessor
+                processors.append(RedisHybridProcessor(proc_settings))
             else:
                 error_msg = f"Unknown processor type: {proc_type}"
                 logger.error(error_msg)
