@@ -611,17 +611,6 @@ class WebhookProcessor(EmailProcessor):
 **SQS Integration**:
 - `SQS_QUEUE_URL`: SQS queue URL for worker
 
-**Redis Integration**:
-- `REDIS_STREAM_NAME`: Redis Stream name for worker
-- `REDIS_HOST`: Redis server hostname (default: localhost)
-- `REDIS_PORT`: Redis server port (default: 6379)
-- `REDIS_DB`: Redis database number (default: 0)
-- `REDIS_PASSWORD`: Redis authentication password (optional)
-- `REDIS_USERNAME`: Redis authentication username (optional)
-- `REDIS_SSL`: Enable SSL/TLS connection (default: false)
-- `REDIS_CONSUMER_GROUP`: Consumer group name (default: workers)
-- `REDIS_CONSUMER_NAME`: Consumer name (auto-generated if not provided)
-
 ### Processor Configuration Format
 
 Processors are configured using dot-notation environment variables:
@@ -632,11 +621,42 @@ email.processors.0.type=processor_type
 email.processors.0.parameter1=value1
 email.processors.0.parameter2=value2
 
-# Multiple processors
-email.processors.0.type=first_processor
-email.processors.0.param=value
-email.processors.1.type=second_processor
-email.processors.1.param=value
+# Redis hybrid processor example
+email.processors.0.type=redis_hybrid
+email.processors.0.redis_host=redis.example.com
+email.processors.0.redis_port=6379
+email.processors.0.redis_db=0
+email.processors.0.redis_password=secret_password
+email.processors.0.redis_username=redis_user
+email.processors.0.redis_ssl=true
+email.processors.0.stream_name=email_queue
+email.processors.0.email_ttl=86400
+email.processors.0.key_prefix=email:
+
+# Redis worker configuration (for redis_worker.py)
+worker.redis.stream_name=email_queue
+worker.redis.host=localhost
+worker.redis.port=6379
+worker.redis.db=0
+worker.redis.password=secret_password
+worker.redis.username=redis_user
+worker.redis.ssl=true
+worker.redis.consumer_group=workers
+worker.redis.consumer_name=worker-1
+
+# Multiple processors with Redis
+email.processors.0.type=redis_hybrid
+email.processors.0.redis_host=localhost
+email.processors.0.stream_name=email_queue
+email.processors.0.email_ttl=7200
+email.processors.1.type=file_storage
+email.processors.1.storage_dir=/backup/emails
+
+# SQS+S3 alternative comparison
+email.processors.0.type=sqs_s3_hybrid
+email.processors.0.queue_url=https://sqs.us-east-1.amazonaws.com/123456789012/email-queue
+email.processors.0.s3_bucket=my-email-storage
+email.processors.0.s3_prefix=emails/
 ```
 
 ### Multiple Processors

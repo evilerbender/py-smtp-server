@@ -269,16 +269,16 @@ class EmailProcessor(ABC):
 - `SQS_QUEUE_URL`: SQS queue URL for email processing
 - `EMAIL_PROCESSORS`: JSON array of processor configurations
 
-**Redis Integration**:
-- `REDIS_STREAM_NAME`: Redis Stream name for email queue
-- `REDIS_HOST`: Redis server hostname (default: localhost)
-- `REDIS_PORT`: Redis server port (default: 6379)
-- `REDIS_DB`: Redis database number (default: 0)
-- `REDIS_PASSWORD`: Redis authentication password (optional)
-- `REDIS_USERNAME`: Redis authentication username (optional)
-- `REDIS_SSL`: Enable SSL/TLS connection (default: false)
-- `REDIS_CONSUMER_GROUP`: Consumer group name (default: workers)
-- `REDIS_CONSUMER_NAME`: Consumer name (auto-generated if not provided)
+**Redis Worker Configuration (Dot-Notation)**:
+- `worker.redis.stream_name`: Redis Stream name for email queue
+- `worker.redis.host`: Redis server hostname (default: localhost)  
+- `worker.redis.port`: Redis server port (default: 6379)
+- `worker.redis.db`: Redis database number (default: 0)
+- `worker.redis.password`: Redis authentication password (optional)
+- `worker.redis.username`: Redis authentication username (optional)
+- `worker.redis.ssl`: Enable SSL/TLS connection (default: false)
+- `worker.redis.consumer_group`: Consumer group name (default: workers)
+- `worker.redis.consumer_name`: Consumer name (auto-generated if not provided)
 
 ### Configuration Loading
 
